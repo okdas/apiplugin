@@ -1,4 +1,0 @@
-apiplugin
-=========
-
-CraftBukkit plugin.

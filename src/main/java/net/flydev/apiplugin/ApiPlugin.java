@@ -5,7 +5,6 @@ import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
-
 public class ApiPlugin extends JavaPlugin {
     /**
      * The main logger.
@@ -22,7 +21,7 @@ public class ApiPlugin extends JavaPlugin {
         logger.info("Hello!");
         Bukkit.getPluginManager().registerEvents(new EventListener(), this);
         
-        getCommand("storage").setExecutor(new CommandRepository());
+        getCommand("storage").setExecutor(new CommandStorage());
         /*getCommand("shop").setExecutor(new CommandShop());*/
     }
 }

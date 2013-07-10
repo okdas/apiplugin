@@ -1,7 +1,0 @@
-name: apiplugin
-main: net.flydev.apiplugin.ApiPlugin
-description: Плагин для магазина
-version: 0.0.1a
-commands:
-    storage:
-        description: Register on the server.
