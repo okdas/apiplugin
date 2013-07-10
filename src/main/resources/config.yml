@@ -1,0 +1,7 @@
+mysql:
+    hostname: 'office.kd-eurotrans.com'
+    database: 'test'
+    username: 'test'
+    password: 'test'
+
+
