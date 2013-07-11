@@ -14,11 +14,12 @@ public class ApiPlugin extends JavaPlugin {
     /**
      * Remote host name
      */
-    protected static String host = new String("http://apiserver.apiary.io");
+    protected static String host = new String("http://storage1.apiary.io");
     /**
-     * Connection to database
+     * Key for requesting to APIserver
      */
-    static Db db;
+    protected static String secretKey; 
+
     
     
     @Override
@@ -29,15 +30,9 @@ public class ApiPlugin extends JavaPlugin {
         //FileConfiguration conf = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "customConfig.yml"));
         FileConfiguration config = getConfig();
         
-        String hostname = config.getString("mysql.hostname");
-        String database = config.getString("mysql.database");
-        String username = config.getString("mysql.username");
-        String password = config.getString("mysql.password");
+        secretKey = config.getString("apiserver-key");
         
         
-        logger.info(hostname);
-        //host, db, user, pass
-        db = new Db(hostname, database, username, password);
         
         getCommand("storage").setExecutor(new CommandStorage());
         /*getCommand("shop").setExecutor(new CommandShop());*/
