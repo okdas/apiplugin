@@ -61,6 +61,9 @@ class CommandStorage implements CommandExecutor {
     }
     
     
+    
+    
+    
     private void list() {
         PlayerInventory inventory = player.getInventory();
         String path = "/server/players/" + player.getDisplayName() + "/storage/items?secret_key=" + ApiPlugin.secretKey;
@@ -68,8 +71,115 @@ class CommandStorage implements CommandExecutor {
         
         JSONArray jsonItemsArray = (JSONArray) JSONValue.parse(HttpRequest.get(path));
         
-        for (int i = 0; i < jsonItemsArray.size(); i = i + 1) {
-            JSONObject jsonItemObject = (JSONObject) jsonItemsArray.get(i);
+        ItemStack[] listItems = jsonArrToItemStack(jsonItemsArray);
+        
+        for (ItemStack item : listItems) {
+            //give item to player
+            //inventory.addItem(item);
+            
+            //send info about item to player
+            player.sendMessage(item.toString());
+        }
+    }
+    
+    
+    
+    
+    
+    private void get(String[] args) {
+        PlayerInventory inventory = player.getInventory();
+        String path = "/server/players/" + player.getDisplayName() + "/storage/ship?secret_key=" + ApiPlugin.secretKey;
+        
+        
+        JSONArray jsonGetItemsArr = new JSONArray();
+        
+        //JSONObject jsonItem;
+        for (int i = 0; i < args.length; i = i + 2) {
+            JSONObject jsonItem = new JSONObject();
+            jsonItem.put("materialId", args[i]);
+            jsonItem.put("amount", args[i + 1]);
+            
+            jsonGetItemsArr.add(jsonItem);
+        }
+        
+        JSONObject jsonResponse = (JSONObject) JSONValue.parse(HttpRequest.post(path, jsonGetItemsArr.toJSONString()));
+        
+        String shipmentId = (String) jsonResponse.get("shipmentId");
+        JSONArray jsonStorageItemsArray = (JSONArray) jsonResponse.get("items");
+        
+        
+        
+        
+        int needFreeSlots = jsonStorageItemsArray.size();
+        
+        
+        //get full stack inventory of player, 36 position
+        ItemStack[] inventoryItems = inventory.getContents();
+        
+        //how much player have a got free places in inventory
+        int freeslots = 0;
+        for (ItemStack item : inventoryItems) {
+            if (item == null) {
+                freeslots =+ 1;
+            }
+        }
+        
+        
+        
+        
+        if (needFreeSlots > freeslots) {
+            //not good, cancel the shipment
+            //server/players/{playerId}/storage/shipments/{shipmentId}/cancel{?secret_key}
+            String cancelShip = "/server/players/" + player.getDisplayName() + "/storage/shipments/" + shipmentId + "/cancel?secret_key=" + ApiPlugin.secretKey;
+            HttpRequest.get(path);
+        } else {
+            //well, we have a got enough free space and put this fucking items
+            
+            //get array of items
+            ItemStack[] listItems = jsonArrToItemStack(jsonStorageItemsArray);
+            
+            for (ItemStack item : listItems) {
+                //give item to player
+                inventory.addItem(item);
+            }
+            
+            //ok, fine, now we need to close the shipment
+            //server/players/{playerId}/storage/shipments/{shipmentId}/close{?secret_key}
+            String closeShip = "/server/players/" + player.getDisplayName() + "/storage/shipments/" + shipmentId + "/close?secret_key=" + ApiPlugin.secretKey;
+            HttpRequest.get(path);
+        }
+    }
+    
+    
+    
+    
+    private void getall() {
+        PlayerInventory inventory = player.getInventory();
+        String path = "/server/players/" + player.getDisplayName() + "/storage/items?secret_key=" + ApiPlugin.secretKey;
+        
+        
+        JSONArray jsonItemsArray = (JSONArray) JSONValue.parse(HttpRequest.get(path));
+        
+        ItemStack[] listItems = jsonArrToItemStack(jsonItemsArray);
+        
+        for (ItemStack item : listItems) {
+            //give item to player
+            inventory.addItem(item);
+            
+            //send info about item to player
+            //player.sendMessage(item.toString());
+        }
+    }
+
+
+    
+
+    
+    private static ItemStack[] jsonArrToItemStack(JSONArray array) {
+        ItemStack[] items = new ItemStack[array.size()];
+        
+        for (int i = 0; i < array.size(); i = i + 1) {
+            JSONObject jsonItemObject = (JSONObject) array.get(i);
             
             String[] materialArr = jsonItemObject.get("materialId").toString().split(":");
 
@@ -118,152 +228,9 @@ class CommandStorage implements CommandExecutor {
             }*/
             
             
-            //give item to player
-            //inventory.addItem(item);
-            //send info about item to player
-            player.sendMessage(item.toString());
-        }
-    }
-    
-    
-    
-    
-    
-    private void get(String[] args) {
-        String path = "/server/players/" + player.getDisplayName() + "/storage/ship?secret_key=" + ApiPlugin.secretKey;
-        
-        
-        JSONArray jsonArr = new JSONArray();
-        
-        //JSONObject jsonItem;
-        for (int i = 0; i < args.length; i = i + 2) {
-            JSONObject jsonItem = new JSONObject();
-            jsonItem.put("materialId", args[i]);
-            jsonItem.put("amount", args[i + 1]);
-            
-            jsonArr.add(jsonItem);
+            items[i] = item;
         }
         
-        String response = HttpRequest.post(path, jsonArr.toJSONString());
-        
-        
-        PlayerInventory inventory = player.getInventory();
-        
-        /*for (int i = 0; i < args.length; i = i + 2) {
-            String[] materialArr = args[i].split(":");
-
-            //id and data integer for creating item
-            int materialId = Integer.parseInt(materialArr[0]);
-            //modification for changing texture of item  
-            int materialData = materialArr.length > 1 ? Integer.parseInt(materialArr[1]) : 0;
-            //i think you understand this variable
-            int amount = Integer.parseInt(args[i + 1]);
-            
-            
-
-            //creating item
-            //ItemStack item = new ItemStack(materialId,amount,(byte) materialData);
-            ItemStack item = new ItemStack(Material.getMaterial(materialId), amount, (byte) materialData);
-
-            player.sendMessage(item.toString());
-        }*/
-        
-        
-        /*ItemStack item = new ItemStack(5,64,(byte)2);
-        ItemStack item0 = new ItemStack(5,64,(byte)0);
-        ItemStack item1 = new ItemStack(264,64,(byte)0);*/
-        
-        /*MaterialData data = item.getData();
-        data.setData((byte)0);
-        item.setData(data);*/
-        
-        //meta.setDisplayName("MY INTENT");
-        //aml.setItemMeta(meta);
-        
-        
-        /*JSONArray list = new JSONArray();
-        list.add("foo");
-        list.add(new Integer(100));
-        list.add(new Double(1000.21));
-        list.add(new Boolean(true));
-        list.add(null);
-        System.out.print(list);*/
-        
-        
-        /*JSONObject obj = new JSONObject();
-        obj.put("materialId", "5");
-        obj.put("amount", "64");
-        
-        JSONArray list = new JSONArray();
-        list.add(obj);
-        
-        obj = new JSONObject();
-        obj.put("materialId", "279");
-        obj.put("amount", "1");
-        
-        list.add(obj);*/
-
-        /*StringWriter out = new StringWriter();
-        obj.writeJSONString(out);
-        String jsonText = out.toString();
-        System.out.print(jsonText);
-        params.put{ "materialId": "5:0", "amount": 64 },
-        { "materialId": "5:2", "amount": 64 },
-        { "materialId": "279", "amount": 1 }
-
-        HttpRequest.post(path, list.toJSONString());*/
+        return items;
     }
-    
-    private void getall() {
-    }
-
-
-    
-    
-    /*private ItemStack[] list() {
-     * //ItemStack[] items = list();
-                    //PlayerInventory inventory = player.getInventory();
-        try {
-            String input;
-            StringBuilder responseData = new StringBuilder();
-            ItemStack[] arrItems;
-
-            
-            URL remote = new URL(ApiPlugin.host + "/storage/");
-            BufferedReader in = new BufferedReader(new InputStreamReader(remote.openStream()));
-
-            while ((input = in.readLine()) != null) {
-                responseData.append(input);
-            }
-            
-            in.close();
-            
-            JSONObject responseObject = (JSONObject) JSONValue.parse(responseData.toString());
-
-            if (responseObject.get("request") != null) {
-                JSONArray jsonArray = (JSONArray) responseObject.get("request");
-                
-                arrItems = new ItemStack[jsonArray.size()];
-            
-                for (Integer i = 0; i < jsonArray.size(); i = i + 1) {
-                    JSONArray arrItem = (JSONArray) jsonArray.get(i);
-                    int id = Integer.parseInt(arrItem.get(0).toString());
-                    int amount = Integer.parseInt(arrItem.get(1).toString());
-                    
-                    arrItems[i] = new ItemStack(id, amount);
-                }
-                
-                return arrItems;
-            } else {
-                logger.info("WTF");
-                return null;
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-    
-    private void get() {
-    }*/
 }
