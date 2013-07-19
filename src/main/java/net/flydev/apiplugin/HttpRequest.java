@@ -77,7 +77,7 @@ class HttpRequest {
 
                 return response.toString();
             } else {
-                logger.warning(connection.toString());
+                logger.warning(responseCode + " " + connection.toString());
                 return null;
             }
         } catch (IOException e) {
