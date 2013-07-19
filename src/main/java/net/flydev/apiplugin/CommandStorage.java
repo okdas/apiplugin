@@ -1,8 +1,6 @@
 package net.flydev.apiplugin;
 
 
-import java.util.logging.Logger;
-
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -16,18 +14,27 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 
+
+
 class CommandStorage implements CommandExecutor {
     /**
-     * The main logger.
+     * Главный логер
      */
-    private Logger logger = Logger.getLogger("Minecraft");
+    //private Logger logger = Logger.getLogger("Minecraft");
     /**
-     * The player
+     * Игрок, который вызвал команду.
      */
     private Player player;
 
     
     
+    /**
+     * Возникает при выполнении команды зарегистрированной в {@link ApiPlugin}.
+     * На данный момент может обрабатывать 3 типа аргументов. Первый 'list' это
+     * список купленных товаров. Дальше 'get' это получение определенного товара\товаров
+     * со склада (для их получения нужно указывать их id и количество). И 'getall' - 
+     * получение всех товаров со склада.
+     */
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         player = (Player) sender;
@@ -63,9 +70,12 @@ class CommandStorage implements CommandExecutor {
     
     
     
-    
+    /**
+     * Список доступных айтемов на складе.
+     * 
+     * @return возвращает состояние выполенения команды
+     */
     private boolean list() {
-        PlayerInventory inventory = player.getInventory();
         String path = "/server/players/" + player.getDisplayName() + "/storage?secret_key=" + ApiPlugin.secretKey;
         
         
@@ -98,7 +108,12 @@ class CommandStorage implements CommandExecutor {
     
     
     
-    
+    /**
+     * Выдача определенных айтемов доступных на складе.
+     * 
+     * @param args массив содержащий id и количество айтемов
+     * @return возвращает состояние выполенения команды 
+     */
     private boolean get(String[] args) {
         PlayerInventory inventory = player.getInventory();
         String path = "/server/players/" + player.getDisplayName() + "/storage/shipments/open?secret_key=" + ApiPlugin.secretKey;
@@ -106,11 +121,11 @@ class CommandStorage implements CommandExecutor {
         
         
         
-        //how much we want get items
+        //сколько айтемов хотим получить
         int getItemsSlots = args.length / 2;
         
         
-        //get full stack inventory of player, 36 position
+        //получаем весь инвентарь игрока, 36 позиций
         ItemStack[] inventoryItems = inventory.getContents();
         
         int freeslots = 0;
@@ -121,7 +136,10 @@ class CommandStorage implements CommandExecutor {
         }
         
         
-        //if we have less free slots than we want, try to cut items array
+        /*
+         * если у нас меньше свободных слотов чем мы запросили
+         * то добавим только то количество айтемов сколько можно
+         */
         if (getItemsSlots > freeslots) {
             getItemsSlots = freeslots;
         }
@@ -133,7 +151,8 @@ class CommandStorage implements CommandExecutor {
         
         JSONArray jsonGetItemsArr = new JSONArray();
         
-        //JSONObject jsonItem;
+        
+        //генерируем json для запроса нужный айтемов         
         for (int i = 0; i < (getItemsSlots * 2); i = i + 2) {
             JSONObject jsonItem = new JSONObject();
             jsonItem.put("materialId", args[i]);
@@ -144,7 +163,7 @@ class CommandStorage implements CommandExecutor {
         
         
         
-        //send message to server for open shipment
+        //отправляем json с предметами и открываем шипмент на сервере, получаем ответ
         String response =  HttpRequest.post(path, jsonGetItemsArr.toJSONString());
         if (response == null) {
             //logger.warning("hm...something wrong");
@@ -152,29 +171,33 @@ class CommandStorage implements CommandExecutor {
         }
         JSONObject jsonResponse = (JSONObject) JSONValue.parse(response);
         
-        
+        //идентификатор шипмента
         String shipmentId = jsonResponse.get("shipmentId").toString();
+        
+        //массив айтемов которые есть на складе и которые мы дадим игроку
         JSONArray jsonStorageItemsArray = (JSONArray) jsonResponse.get("items");
         
         
         
         
-        //well, we have a got enough free space and put this fucking items
         
-        //get array of items
+        //преобразовываем json айтемов в ItemStack[]
         ItemStack[] listItems = jsonArrToItemStack(jsonStorageItemsArray);
         
         for (ItemStack item : listItems) {
-            //give item to player
+            //даем игроку айтем
             inventory.addItem(item);
-            
+            /*
+             * нужно добавить создание массва добавленых айтемов
+             * его мы будем отправлять для закрытия шипмента
+             */
             //player.sendMessage(item.toString());
         }
         
-        //ok, fine, now we need to close the shipment
+        //ок, все сделали, закрываем шипмент теперь
         //server/players/{playerId}/storage/shipments/{shipmentId}/close{?secret_key}
         String closeShip = "/server/players/" + player.getDisplayName() + "/storage/shipments/" + shipmentId + "/close?secret_key=" + ApiPlugin.secretKey;
-        HttpRequest.get(path);
+        HttpRequest.get(closeShip);
         
         
         return true;
@@ -184,7 +207,11 @@ class CommandStorage implements CommandExecutor {
     
     
     
-    
+    /**
+     * Выдача всех айтемов доступных на складе.
+     * 
+     * @return возвращает состояние выполенения команды
+     */
     private boolean getall() {
         PlayerInventory inventory = player.getInventory();
         String path = "/server/players/" + player.getDisplayName() + "/storage/items?secret_key=" + ApiPlugin.secretKey;
@@ -200,10 +227,10 @@ class CommandStorage implements CommandExecutor {
         ItemStack[] listItems = jsonArrToItemStack(jsonItemsArray);
         
         for (ItemStack item : listItems) {
-            //give item to player
+            //выдаем айтем игроку
             inventory.addItem(item);
             
-            //send info about item to player
+            //отправляем инфу о выданном айтеме игроку
             //player.sendMessage(item.toString());
         }
         
@@ -214,7 +241,11 @@ class CommandStorage implements CommandExecutor {
     
     
 
-    
+    /**
+     * Преобразование {@link JSONArray} массива в массив {@link ItemStack}.
+     * @param array массив состоящий из id, количества, имени, зачарований элемента
+     * @return возвращает массив {@link ItemStack}
+     */
     private static ItemStack[] jsonArrToItemStack(JSONArray array) {
         ItemStack[] items = new ItemStack[array.size()];
         
@@ -224,47 +255,50 @@ class CommandStorage implements CommandExecutor {
             String[] materialArr = jsonItemObject.get("materialId").toString().split(":");
 
             
-            //id and data integer for creating item
+            //id число для определения айтема
             int materialId = Integer.parseInt(materialArr[0]);
-            //modification for changing texture of item  
+            
+            //модификатор определяющий текстуру айтема (есть не у всех)  
             int materialData = materialArr.length > 1 ? Integer.parseInt(materialArr[1]) : 0;
 
+            //количество айтемов
             int amount = Integer.parseInt(jsonItemObject.get("amount").toString());
             
             
 
-            //creating item
+            //создаем айтем, путем получения сначала материала
             //ItemStack item = new ItemStack(materialId,amount,(byte) materialData);
             ItemStack item = new ItemStack(Material.getMaterial(materialId), amount, (byte) materialData);
             
             
             
-            //different name for new item
-            /*String nameString = (String) jsonItemObject.get("name");
+            //может быть другое имя айтема, устанавливаем его
+            String nameString = (String) jsonItemObject.get("name");
             if (nameString != null) {
                 ItemMeta itemMeta = item.getItemMeta();
                 itemMeta.setDisplayName(nameString);
                 item.setItemMeta(itemMeta);
-            }*/
+            }
 
             
             
             
-            //enchantment for new item
+            //зачарования для айтема
             JSONArray enchantmentsArr = (JSONArray) jsonItemObject.get("enchantments");
             if (enchantmentsArr != null) {
                 for (int j = 0; j < enchantmentsArr.size(); j = j + 1) {
                     JSONArray enchantmentsIdentify = (JSONArray) enchantmentsArr.get(j);
                     
-                    //id enchant
+                    //id зачарования и его уровень
                     int id = Integer.parseInt(enchantmentsIdentify.get(0).toString());
-                    //level of enchanting
                     int level = Integer.parseInt(enchantmentsIdentify.get(1).toString());
                     
                     
+                    //создаем зачарование
                     Enchantment enchantment = Enchantment.getById(id);
                     
                     
+                    //небезопасно добавляем его к предмету
                     item.addUnsafeEnchantment(enchantment, level);
                 }
             }
