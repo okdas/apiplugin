@@ -93,23 +93,24 @@
                     </reportPlugins>
                 </configuration>
             </plugin>
+        
         </plugins>
     </build>
 
     <dependencies>
-        <dependency>
-            <groupId>org.bukkit</groupId>
-            <artifactId>bukkit</artifactId>
-            <version>1.6.2-R0.1-SNAPSHOT</version>
-        </dependency>
         
         <dependency>
             <groupId>com.googlecode.json-simple</groupId>
             <artifactId>json-simple</artifactId>
             <version>1.1.1</version>
         </dependency>
-        
-            
+
+
+        <dependency>
+        	<groupId>org.bukkit</groupId>
+        	<artifactId>bukkit</artifactId>
+        	<version>1.6.2-R0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
     
     <reporting>
@@ -119,4 +120,5 @@
     	<system>GitHub</system>
     	<url>https://github.com/okdas/apiplugin/issues</url>
     </issueManagement>
+    <url>https://github.com/okdas/apiplugin</url>
 </project>
