@@ -20,7 +20,7 @@ public class ApiPlugin extends JavaPlugin {
     /**
      * Удаленное имя хоста для api запросов
      */
-    protected static String host = new String("http://storage1.apiary.io");
+    protected static String host = new String("http://127.0.0.1:8000");
     /**
      * Секретный ключ сервера, для api запросов
      */
