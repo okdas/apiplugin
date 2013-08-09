@@ -1,6 +1,8 @@
 package net.flydev.apiplugin;
 
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Logger;
 
 import org.bukkit.Material;
@@ -139,66 +141,83 @@ class CommandStorage implements CommandExecutor {
         String path = "/server/players/" + player.getDisplayName() + "/storage/shipments/open?key=" + ApiPlugin.secretKey;
         
         
-        /*
-         * у заданных предметов нужно получить максимальный стек
-         * дабы не интерпретировать 128 штук за один стек
-         */
-        //ItemStack item = new ItemStack(Material.getMaterial(materialId), amount, (byte) materialData);
-        
         // все ли верно указано...
         if (args.length % 2 != 0) {
             return false;
         }
         
+
+        // узнаем сколько слотов свободно 
+        int freeSlots = 0;
+        for(ItemStack i : inventory.getContents()) {
+            if(i == null) {
+                freeSlots++;
+            } else if(i.getType() == Material.AIR) {
+                freeSlots++;
+            }
+        }
         
-        
-        // строим двумерный массив требуемых айтемов
-        String[][] requestItems = new String[args.length / 2][2];
-        
-        ItemStack[] wantItems = new ItemStack[args.length / 2];
-        
-        for (int i = 0, j = 0; i < wantItems.length; i++) {
-                        
+
+        // список желаемых айтемов
+        ArrayList<ArrayList<String>> wantItems = new ArrayList<ArrayList<String>>();
+
+        for (int i = 0, j = 0; i < (args.length / 2); i++) {
+            String[] materialArr = args[j].split(":");
+
+            // id число для определения айтема
+            int materialId = Integer.parseInt(materialArr[0]);
             
+            // модификатор определяющий текстуру айтема (есть не у всех)  
+            int materialData = materialArr.length > 1 ? Integer.parseInt(materialArr[1]) : 0;
+            
+            // количество
+            int amount = Integer.parseInt(args[j + 1]);
+            
+            
+            // создаем предварительный айтем, для того что бы узнать размер стека
+            ItemStack preAddItem = new ItemStack(materialId, amount, (byte) materialData);
+            
+            
+            
+            ArrayList<String> item;
+            while (amount > preAddItem.getMaxStackSize()) {
+                item = new ArrayList<String>(); 
+                
+                // id
+                item.add(args[j]);
+                // amount
+                item.add(new Integer(preAddItem.getMaxStackSize()).toString());
+                
+                wantItems.add(item);
+                
+                
+                amount -= preAddItem.getMaxStackSize();
+            }
+            
+            item = new ArrayList<String>();
+            
+            // id
+            item.add(args[j]);
+            // amount
+            item.add(new Integer(amount).toString());
+            
+            
+            wantItems.add(item);
+            
+
             j += 2;
         }
         
         
-        // получаем весь инвентарь игрока, 36 позиций
-        ItemStack[] playerInventoryItems = inventory.getContents();
-        
-        int freeslots = 0;
-        for (ItemStack item : playerInventoryItems) {
-            if (item == null) {
-                freeslots =+ 1;
-            }
-        }
-        
-        
-        /*
-         * если у нас меньше свободных слотов чем мы запросили
-         * то добавим только то количество айтемов сколько можно
-         */
-        /*if (getItemsSlots > freeslots) {
-            getItemsSlots = freeslots;
-        }
-
-        
-        
-        
-        
         JSONArray jsonGetItemsArr = new JSONArray();
         
-        
-        //генерируем json для удаленного запроса нужных айтемов         
-        for (int i = 0; i < (getItemsSlots * 2); i = i + 2) {
-            JSONObject jsonItem = new JSONObject();
-            jsonItem.put("materialId", args[i]);
-            jsonItem.put("amount", args[i + 1]);
+        for (int i = 1; i <= wantItems.size(); i++) {
+            if (i > freeSlots) {
+                break;
+            }
             
-            jsonGetItemsArr.add(jsonItem);
-        }*/
-        
+            
+        }
         
         
         /*
@@ -220,7 +239,9 @@ class CommandStorage implements CommandExecutor {
         JSONArray jsonStorageItemsArray = (JSONArray) jsonResponse.get("items");*/
         
         
-        
+        /*JSONObject jsonItem = new JSONObject();
+        jsonItem.put("materialId", args[i]);
+        jsonItem.put("amount", args[i + 1]);*/
         
         
         //преобразовываем json айтемов в ItemStack[]
@@ -285,8 +306,29 @@ class CommandStorage implements CommandExecutor {
     
     private boolean test() {
         PlayerInventory inventory = player.getInventory();
-        //ItemStack item = new ItemStack(Material.getMaterial(5), 320);
-        //inventory.addItem(item);
+        ArrayList<ItemStack> items = new ArrayList<ItemStack>();
+        
+        int id = 5;
+        int amount = 360;
+        
+        
+        ItemStack preAddItem = new ItemStack(id, amount, (byte) 1);
+        
+        while (amount > preAddItem.getMaxStackSize()) {
+            ItemStack quasiItem = new ItemStack(id, preAddItem.getMaxStackSize(), (byte) 1);
+            items.add(quasiItem);
+           
+            amount -= preAddItem.getMaxStackSize();
+            
+            logger.info(new Integer(amount).toString());
+        }
+        
+        items.add(new ItemStack(id, amount, (byte) 1));
+        
+        for (ItemStack item: items) {
+            inventory.addItem(item);
+        }
+        
         return false;
     }
     
