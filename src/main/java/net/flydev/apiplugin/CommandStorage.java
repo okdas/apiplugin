@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -51,7 +52,7 @@ class CommandStorage implements CommandExecutor {
             switch (args[0]) {
                 
                 case "list": {
-                    player.sendMessage("list items...");
+                    player.sendMessage("список вещей...");
                     
                     /* /storage list */
                     return list();
@@ -61,14 +62,14 @@ class CommandStorage implements CommandExecutor {
                     String[] params = new String[args.length - 1];
                     System.arraycopy(args, 1, params, 0, args.length - 1);
                     
-                    player.sendMessage("get item...");
+                    player.sendMessage("получение...");
                     
                     /* /storage get 5 16 8 20 */
                     return get(params);
                 }
                 
                 case "getall": {
-                    player.sendMessage("get all items...");
+                    player.sendMessage("получить все...");
                     
                     /* /storage getall */
                     return getall();
@@ -98,31 +99,35 @@ class CommandStorage implements CommandExecutor {
      * @return возвращает состояние выполенения команды
      */
     private boolean list() {
-        String path = "/api/v1/server/storage/" + player.getDisplayName() + "/list?key=" + ApiPlugin.secretKey;
+        String urlAllItems = "/api/v1/server/storage/" + player.getDisplayName() + "/list?key=" + ApiPlugin.secretKey;
 
         
         
-        String responseItems = HttpRequest.get(path);
-        if (responseItems == null) {
+        // все доступные айтемы
+        String httpAllItems = HttpRequest.get(urlAllItems);
+
+        if (httpAllItems == null) {
             //player.sendMessage("hm...something wrong");
             return false;
         }
         
-        JSONObject jsonItemsObj = (JSONObject) JSONValue.parse(responseItems);
+        // строку в объект превращаем
+        JSONObject jsonItemsObj = (JSONObject) JSONValue.parse(httpAllItems);
         
-        // { items: [...] }
-        JSONArray jsonItemsArray = (JSONArray) jsonItemsObj.get("items");
+        // массив самих вещей { items: [...] }
+        JSONArray jsonItems = (JSONArray) jsonItemsObj.get("items");
+
         
         
-        ItemStack[] listItems = jsonArrToItemStack(jsonItemsArray);
-        
-        for (ItemStack item : listItems) {
-            //give item to player
-            //inventory.addItem(item);
+        for (int i = 0; i < jsonItems.size(); i++) {
+            JSONObject jsonItem = (JSONObject) jsonItems.get(i);
             
-            //send info about item to player
-            player.sendMessage(item.toString());
+            ItemStack item = jsonItemToItemStack(jsonItem);
+
+            //пишем игроку
+            player.sendMessage(ChatColor.RED + jsonItem.get("id").toString() + ": " + ChatColor.GREEN + item.getItemMeta().getDisplayName() + " x " + item.getAmount());
         }
+
         return true;
     }
     
@@ -137,8 +142,16 @@ class CommandStorage implements CommandExecutor {
      * @return возвращает состояние выполенения команды 
      */
     private boolean get(String[] args) {
-        PlayerInventory inventory = player.getInventory();
-        String path = "/server/players/" + player.getDisplayName() + "/storage/shipments/open?key=" + ApiPlugin.secretKey;
+        /*
+         * 1. скачиваем весь список доступных айтемов, список имеет id, энчаты
+         *    и material (самое главное)
+         * 2. берем по id нужные нам айтемы
+         * 3. а дальше высчитываем amount подходящий и потом все как обычно
+         * 4. отсылаем id и amount, материал не нужен
+         */
+        String urlAllItems = "/api/v1/server/storage/" + player.getDisplayName() + "/list?key=" + ApiPlugin.secretKey;
+        String urlOpenShipment = "/api/v1/server/storage/" + player.getDisplayName() + "/shipments/open?key=" + ApiPlugin.secretKey;
+        
         
         
         // все ли верно указано...
@@ -146,8 +159,26 @@ class CommandStorage implements CommandExecutor {
             return false;
         }
         
+        
+        
+        // запрашиваем все айтемы которые есть, содержит id и материалы
+        String httpAllItems =  HttpRequest.get(urlAllItems);
+        if (httpAllItems == null) {
+            //player.sendMessage("hm...something wrong");
+            return false;
+        }
+        
+        // строку в объект превращаем
+        JSONObject jsonItemsObj = (JSONObject) JSONValue.parse(httpAllItems);
+        
+        // { items: [...] }
+        JSONArray jsonItems = (JSONArray) jsonItemsObj.get("items");
+        
 
-        // узнаем сколько слотов свободно 
+        
+        // узнаем сколько слотов свободно
+        PlayerInventory inventory = player.getInventory();
+        
         int freeSlots = 0;
         for(ItemStack i : inventory.getContents()) {
             if(i == null) {
@@ -157,41 +188,85 @@ class CommandStorage implements CommandExecutor {
             }
         }
         
+        if (freeSlots == 0) {
+            player.sendMessage(ChatColor.RED + "нет места");
+            return false;
+        }
         
+
+        
+        // теперь надо выдрать те айтемы которые нужны
+        // это массив айтемов с id, material, amount
+        ArrayList<String[]> queryItems = new ArrayList<String[]>();
+        
+        // args содержит id, amount
+        for (int i = 0, j = 0; i < (args.length / 2); i++) {
+            int id = Integer.parseInt(args[j]);
+            
+            
+            for (int k = 0; k < jsonItems.size(); k++) {
+                JSONObject jsonItem = (JSONObject) jsonItems.get(k);
+                
+
+                // если это то что нам нужно, раскладываем его нормально
+                if (new Integer(jsonItem.get("id").toString()) == id) {
+                    // id, material, amount
+                    String[] itemWithOptions = new String[3];
+                    
+                    itemWithOptions[0] = jsonItem.get("id").toString();
+                    itemWithOptions[1] = jsonItem.get("material").toString();
+                    if (Integer.parseInt(args[j + 1]) > Integer.parseInt(jsonItem.get("amount").toString())) {
+                        itemWithOptions[2] = jsonItem.get("amount").toString();
+                    } else {
+                        itemWithOptions[2] = args[j + 1];
+                    }
+                    
+                    queryItems.add(itemWithOptions);
+                }
+            }
+            
+            
+            j += 2;
+        }
+        
+
         
         // список и количесво вещей которые мы запросим у сервера
-        ArrayList<ArrayList<String>> reqItems = new ArrayList<ArrayList<String>>();
+        ArrayList<String[]> sendItems = new ArrayList<String[]>();
         
-        // цикл проходит по вещам которые мы запросили в чате
-        for (int i = 0, j = 0; i < (args.length / 2); i++) {
-            // количество айтемов
-            int sizeReqItems = reqItems.size();
+        // цикл проходит по вещам из массива queryItems
+        for (String[] queryItem : queryItems) {
+            // количество айтемов, нужно для сравнения со свободными слотами
+            int sizeReqItems = sendItems.size();
             
-            
-            String[] materialArr = args[j].split(":");
 
-            // id - число для определения айтема
+            
+            String[] materialArr = queryItem[1].split(":");
+
+            // id - число для определения айтема в игре
             int materialId = Integer.parseInt(materialArr[0]);
             
             // модификатор определяющий текстуру айтема (есть не у всех)  
             int materialData = materialArr.length > 1 ? Integer.parseInt(materialArr[1]) : 0;
             
             // количество которое хотим получить
-            int wantAmount = Integer.parseInt(args[j + 1]);
+            int wantAmount = new Integer(queryItem[2]);
             
             // создаем предварительный айтем, для того что бы узнать размер стека
             ItemStack preAddItem = new ItemStack(materialId, wantAmount, (byte) materialData);
             
             
+            
             // количество вещей которые мы добавили уже в массив
-            int reqAmount = 0;
+            // и то количество, которое отошлем на сервер
+            int sendAmount = 0;
             
             // если количество запрошенных больше чем стек
             while (wantAmount > preAddItem.getMaxStackSize()) {
                 
                 // проверяем есть ли еще свободное место
                 if (sizeReqItems < freeSlots) {
-                    reqAmount += preAddItem.getMaxStackSize();
+                    sendAmount += preAddItem.getMaxStackSize();
                     wantAmount -= preAddItem.getMaxStackSize();
                     
                     // говорим что виртуально добавили один айтем в массив
@@ -202,73 +277,111 @@ class CommandStorage implements CommandExecutor {
             }
             
             if (sizeReqItems < freeSlots) {
-                reqAmount += wantAmount;
+                sendAmount += wantAmount;
                 sizeReqItems++;
             }
             
             
+            
             // окончательный массив одной вещи
-            ArrayList<String> item = new ArrayList<String>();
-            item.add(args[j]);
-            item.add(new Integer(reqAmount).toString());
+            String[] sendItem = new String[2];
+            sendItem[0] = queryItem[0];
+            sendItem[1] = new Integer(sendAmount).toString();
             
             // добавляем в общий массив
-            reqItems.add(item);
-            
-            
-            j += 2;
+            sendItems.add(sendItem);
         }
         
         
         
-        // json массив который отошлем в запросе
+        /*
+         * json массив который отошлем в запросе
+         * [
+         *     {
+         *          id: '5',
+         *          amount: 10
+         *      }, {
+         *          id: '7',
+         *          amount: '2'
+         *      }
+         *  ]
+         */
         JSONArray jsonGetItemsArr = new JSONArray();
         
-        for (int i = 0; i < reqItems.size(); i++) {
+        for (int i = 0; i < sendItems.size(); i++) {
             JSONObject jsonItem = new JSONObject();
-            jsonItem.put("materialId", reqItems.get(i).get(0));
-            jsonItem.put("amount", reqItems.get(i).get(1));
+            jsonItem.put("id", sendItems.get(i)[0]);
+            jsonItem.put("amount", sendItems.get(i)[1]);
             
             jsonGetItemsArr.add(jsonItem);
         }
         
-        
-        logger.info(jsonGetItemsArr.toJSONString());
         
         
         /*
          * отправляем json с предметами и открываем шипмент на сервере
          * получаем ответ, который содержит айтемы и их количество которое нам
          * доступно из запршиваемого списка
+         * и придет
+         * [
+         *     {
+         *          id: 5,
+         *          amount: 10
+         *      }, {
+         *          id: 7,
+         *          amount: 2
+         *      }
+         *  ]
          */
-        /*String response =  HttpRequest.post(path, jsonGetItemsArr.toJSONString());
-        if (response == null) {
+        String httpGetItems =  HttpRequest.post(urlOpenShipment, jsonGetItemsArr.toJSONString());
+        if (httpGetItems == null) {
             //logger.warning("hm...something wrong");
             return false;
         }
-        JSONObject jsonResponse = (JSONObject) JSONValue.parse(response);
+        
+        logger.info(httpGetItems);
+        
+        JSONObject jsonResShipment = (JSONObject) JSONValue.parse(httpGetItems);
         
         //идентификатор шипмента
-        String shipmentId = jsonResponse.get("shipmentId").toString();
-        
+        String shipmentId = jsonResShipment.get("id").toString();
+
         //массив айтемов которые есть на складе и которые мы дадим игроку
-        JSONArray jsonStorageItemsArray = (JSONArray) jsonResponse.get("items");
+        JSONArray jsonShipmentItems = (JSONArray) jsonResShipment.get("items");
         
         
-        //преобразовываем json айтемов в ItemStack[]
-        ItemStack[] listItems = jsonArrToItemStack(jsonStorageItemsArray);
-        
-        for (ItemStack item : listItems) {
-            //даем игроку айтем
-            inventory.addItem(item);
-            // нужно добавить создание массва добавленых айтемов его мы будем отправлять для закрытия шипмента
-            //player.sendMessage(item.toString());
+        // проходимся по входящему массиву
+        for (int i = 0; i < jsonShipmentItems.size(); i++) {
+            // айтем шипмета
+            JSONObject jsonShipmentItem = (JSONObject) jsonShipmentItems.get(i);
+            
+            for (int j = 0; j < jsonItems.size(); j++) {
+                // айтем из общего списка
+                JSONObject jsonItem = (JSONObject) jsonItems.get(j);
+                
+                
+                
+                // ищем подходящий в общем массиве и даем игроку
+                if (Integer.parseInt(jsonItem.get("id").toString()) == Integer.parseInt(jsonShipmentItem.get("id").toString())) {
+                    JSONObject jsonRightItem = jsonItem;
+                    jsonRightItem.put("amount", jsonShipmentItem.get("amount").toString());
+                    
+                    ItemStack item = jsonItemToItemStack(jsonRightItem);
+
+                    
+                    //даем игроку
+                    player.sendMessage(ChatColor.RED + jsonItem.get("id").toString() + ": " + ChatColor.GREEN + item.getItemMeta().getDisplayName() + " x " + item.getAmount());
+                    
+                    inventory.addItem(item);
+                }
+            }
         }
         
+        
+        
         //ок, все сделали, закрываем шипмент теперь
-        //server/players/{playerId}/storage/shipments/{shipmentId}/close{?secret_key}
-        String closeShip = "/server/players/" + player.getDisplayName() + "/storage/shipments/" + shipmentId + "/close?key=" + ApiPlugin.secretKey;
-        HttpRequest.get(closeShip);*/
+        String closeShip = "/api/v1/server/storage/" + player.getDisplayName() + "/shipments/" + shipmentId + "/close?key=" + ApiPlugin.secretKey;
+        HttpRequest.get(closeShip);
         
         
         return true;
@@ -284,10 +397,19 @@ class CommandStorage implements CommandExecutor {
      * @return возвращает состояние выполенения команды
      */
     private boolean getall() {
-        PlayerInventory inventory = player.getInventory();
-        String path = "/server/players/" + player.getDisplayName() + "/storage/items?secret_key=" + ApiPlugin.secretKey;
+        String urlAllItems = "/api/v1/server/storage/" + player.getDisplayName() + "/list?key=" + ApiPlugin.secretKey;
+        String urlCloseShipment = "/server/players/" + player.getDisplayName() + "/storage/items?secret_key=" + ApiPlugin.secretKey;
         
-        String responseItemsArray = HttpRequest.get(path);
+        
+        // запрашиваем все айтемы которые есть
+        String httpAllItems =  HttpRequest.get(urlAllItems);
+        
+        logger.info(httpAllItems);
+        
+        /*PlayerInventory inventory = player.getInventory();
+        
+        
+        String responseItemsArray = HttpRequest.get(urlCloseShipment);
         if (responseItemsArray == null) {
             //logger.warning("hm...something wrong");
             return false;
@@ -303,7 +425,7 @@ class CommandStorage implements CommandExecutor {
             
             //отправляем инфу о выданном айтеме игроку
             //player.sendMessage(item.toString());
-        }
+        }*/
         
         return true;
     }
@@ -313,29 +435,13 @@ class CommandStorage implements CommandExecutor {
     
     
     private boolean test() {
-        PlayerInventory inventory = player.getInventory();
-        ArrayList<ItemStack> items = new ArrayList<ItemStack>();
-        
-        int id = 5;
+        int id = 276;
         int amount = 360;
         
         
-        ItemStack preAddItem = new ItemStack(id, amount, (byte) 1);
+        ItemStack item = new ItemStack(id, amount);
         
-        while (amount > preAddItem.getMaxStackSize()) {
-            ItemStack quasiItem = new ItemStack(id, preAddItem.getMaxStackSize(), (byte) 1);
-            items.add(quasiItem);
-           
-            amount -= preAddItem.getMaxStackSize();
-            
-            logger.info(new Integer(amount).toString());
-        }
-        
-        items.add(new ItemStack(id, amount, (byte) 1));
-        
-        for (ItemStack item: items) {
-            inventory.addItem(item);
-        }
+        player.sendMessage(new Integer(item.getMaxStackSize()).toString());
         
         return false;
     }
@@ -345,78 +451,68 @@ class CommandStorage implements CommandExecutor {
     
     
     /**
-     * Преобразование {@link JSONArray} массива в массив {@link ItemStack}.
-     * @param array массив состоящий из id, количества, имени, зачарований элемента
-     * @return возвращает массив {@link ItemStack}
+     * Преобразование {@link JSONObject} в {@link ItemStack}.
+     * @param jsonItem объект состоящий из id, количества, имени, зачарований элемента
+     * @return возвращает объект {@link ItemStack}
      */
-    private static ItemStack[] jsonArrToItemStack(JSONArray array) {
-        ItemStack[] items = new ItemStack[array.size()];
+    private ItemStack jsonItemToItemStack(JSONObject jsonItem) {
+        String[] materialArr = jsonItem.get("material").toString().split(":");
         
-        for (int i = 0; i < array.size(); i = i + 1) {
-            JSONObject jsonItemObject = (JSONObject) array.get(i);
-            
-            String[] materialArr = jsonItemObject.get("materialId").toString().split(":");
+        //id число для определения айтема
+        int material = Integer.parseInt(materialArr[0]);
+        
+        //модификатор определяющий текстуру айтема (есть не у всех)  
+        int materialData = materialArr.length > 1 ? Integer.parseInt(materialArr[1]) : 0;
 
-            
-            //id число для определения айтема
-            int materialId = Integer.parseInt(materialArr[0]);
-            
-            //модификатор определяющий текстуру айтема (есть не у всех)  
-            int materialData = materialArr.length > 1 ? Integer.parseInt(materialArr[1]) : 0;
+        //количество айтемов
+        int amount = Integer.parseInt(jsonItem.get("amount").toString());
+        
+        
 
-            //количество айтемов
-            int amount = Integer.parseInt(jsonItemObject.get("amount").toString());
+        //создаем айтем, путем получения сначала материала
+        //ItemStack item = new ItemStack(materialId,amount,(byte) materialData);
+        ItemStack item = new ItemStack(Material.getMaterial(material), amount, (byte) materialData);
+        
+        
+        
+        //может быть другое имя айтема, устанавливаем его
+        String nameString = (String) jsonItem.get("title");
+        if (nameString != null) {
+            ItemMeta itemMeta = item.getItemMeta();
             
-            
-
-            //создаем айтем, путем получения сначала материала
-            //ItemStack item = new ItemStack(materialId,amount,(byte) materialData);
-            ItemStack item = new ItemStack(Material.getMaterial(materialId), amount, (byte) materialData);
-            
-            
-            
-            //может быть другое имя айтема, устанавливаем егоe
-            String nameString = (String) jsonItemObject.get("name");
-            if (nameString != null) {
-                ItemMeta itemMeta = item.getItemMeta();
-                itemMeta.setDisplayName(nameString);
-                item.setItemMeta(itemMeta);
-            }
-
-            
-            
-            
-            //зачарования для айтема
-            JSONArray enchantmentsArr = (JSONArray) jsonItemObject.get("enchantments");
-            if (enchantmentsArr != null) {
-                for (int j = 0; j < enchantmentsArr.size(); j = j + 1) {
-                    JSONArray enchantmentsIdentify = (JSONArray) enchantmentsArr.get(j);
-                    
-                    //id зачарования и его уровень
-                    int id = Integer.parseInt(enchantmentsIdentify.get(0).toString());
-                    int level = Integer.parseInt(enchantmentsIdentify.get(1).toString());
-                    
-                    
-                    //создаем зачарование
-                    Enchantment enchantment = Enchantment.getById(id);
-                    
-                    
-                    //небезопасно добавляем его к предмету
-                    item.addUnsafeEnchantment(enchantment, level);
-                }
-            }
-            
-            
-            items[i] = item;
+            itemMeta.setDisplayName(nameString);
+            item.setItemMeta(itemMeta);
         }
         
-        return items;
+        
+        
+        //зачарования для айтема
+        JSONArray enchantments = (JSONArray) jsonItem.get("enchantments");
+        if (enchantments.size() > 0) {
+            for (int j = 0; j < enchantments.size(); j = j + 1) {
+                JSONObject jsonEnchantment = (JSONObject) enchantments.get(j);
+                
+                //id зачарования и его уровень
+                int id = Integer.parseInt(jsonEnchantment.get("enchantmentId").toString());
+                int level = Integer.parseInt(jsonEnchantment.get("level").toString());
+
+                //создаем зачарование
+                Enchantment enchantment = Enchantment.getById(id);
+                
+                //небезопасно добавляем его к предмету
+                item.addUnsafeEnchantment(enchantment, level);
+            }
+        }
+        
+        return item;
     }
     
     
     
-    private static JSONArray itemStackToJsonArr(ItemStack[] items) {
-        JSONArray jsonItemsArray = new JSONArray();
+    
+  
+    private static JSONObject itemStackToJsonObject(ItemStack item) {
+        JSONObject jsonItemsArray = new JSONObject();
         return jsonItemsArray;
     }
 }

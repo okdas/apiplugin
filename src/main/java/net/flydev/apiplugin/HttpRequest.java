@@ -80,8 +80,8 @@ class HttpRequest {
             URL url = new URL(ApiPlugin.host + path);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
  
-            connection.setConnectTimeout(2000);
-            connection.setReadTimeout(2000);
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(10000);
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/json");
 
@@ -111,7 +111,7 @@ class HttpRequest {
             int responseCode = connection.getResponseCode();
             if (responseCode == 200 || responseCode == 201) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                StringBuffer response = new StringBuffer();
+                StringBuilder response = new StringBuilder();
 
                 String input;
                 while ((input = in.readLine()) != null) {

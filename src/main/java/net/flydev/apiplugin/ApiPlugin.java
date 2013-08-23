@@ -20,7 +20,7 @@ public class ApiPlugin extends JavaPlugin {
     /**
      * Удаленное имя хоста для api запросов
      */
-    protected static String host = new String("http://127.0.0.1:8000");
+    protected static String host = new String("http://manage.local.awesome39.com:8000");
     /**
      * Секретный ключ сервера, для api запросов
      */
@@ -36,7 +36,6 @@ public class ApiPlugin extends JavaPlugin {
      */
     @Override
     public void onEnable() {
-        logger.info("Hello!");
         //Bukkit.getPluginManager().registerEvents(new EventListener(), this);
         
         //FileConfiguration conf = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "customConfig.yml"));
